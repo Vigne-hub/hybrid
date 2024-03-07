@@ -8,6 +8,8 @@ from typing import Any, Dict, List
 import sqlite3
 import subprocess
 import tempfile
+import csv
+from string import ascii_uppercase
 
 
 class ConfigGenerator:
@@ -285,7 +287,6 @@ class JobSubmitter:
         self.json_dir = json_dir
         self.out_dir = out_dir
 
-
     @property
     def json_dir(self) -> str:
         return self._json_dir
@@ -363,3 +364,91 @@ sacct -j $SLURM_JOB_ID
         finally:
             # Ensure the temporary file is removed after submission
             os.remove(self.temp_script_path)
+
+
+class SubmitConfigJob(JobSubmitter):
+    def __init__(self, settings_config_file="settings.cfg"):
+
+        job_config = configparser.ConfigParser()
+        job_config.read(settings_config_file)
+
+        super().__init__(
+            json_dir=job_config.get('master_settings', 'target_directory', fallback="generated_configs"),
+            out_dir=job_config.get('slurm_settings', 'out_dir', fallback="config_run"),
+            Nconfigs=job_config.get('slurm_settings', 'job_arrays', fallback="1-10"),
+            cpus_per_task=job_config.getint('slurm_settings', 'n_cpus', fallback=1),
+            mem_per_cpu=job_config.get('slurm_settings', 'mem_in_M', fallback=500),
+            time=job_config.get('slurm_settings', 'sim_time', fallback='0-1:31:00'),
+        )
+
+
+class MLDatabaseManager(DatabaseManager):
+    def create_ml_table(self, csv_headers: List[str]):
+        csv_columns = ", ".join([f"{header} TEXT" for header in csv_headers])
+        self.cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS {self.table_name} (
+                "ConfigID" INTEGER,
+                "nonlocal_bonds" TEXT,
+                "nbeads" INTEGER,
+                "Filename" TEXT,
+                {csv_columns},
+                FOREIGN KEY("ConfigID") REFERENCES configurations(ID)
+            )
+        ''')
+        self.connection.commit()
+
+    def integrate_csv_data(self, csv_name: str, search_path: str, csv_headers: List[str] = None):
+
+        self.table_name = csv_name.replace(".csv", "")
+        if csv_headers is None:
+            # Defaults to the first 10 letters of the alphabet if not provided
+            csv_headers = list(ascii_uppercase)[:10]
+
+        self.cursor.execute('SELECT ID, nonlocal_bonds, nbeads, Filename FROM configurations')
+        configurations = self.cursor.fetchall()
+
+        for config_id, nonlocal_bonds, nbeads, filename in configurations:
+            directory = os.path.join(search_path, filename.rstrip('.json'))
+            csv_file_path = os.path.join(directory, csv_name)
+            if os.path.isfile(csv_file_path):
+                with open(csv_file_path, 'r') as file:
+                    first_line = file.readline().strip().replace(" ", "")
+                    file.seek(0)  # Reset file pointer to the beginning
+
+                    # Check if the first line matches expected headers or is alphabetical
+                    is_header = all(item.isalpha() for item in first_line.split(','))
+
+                    # If detected header, use it; otherwise, use provided/default headers
+                    if is_header:
+                        csv_reader = csv.DictReader(file)
+                        dynamic_headers = csv_reader.fieldnames
+                    else:
+                        file.seek(0)  # Reset again for csv.reader since no header row
+                        csv_reader = csv.reader(file)
+                        dynamic_headers = csv_headers
+
+                    # format the headers before creating the table and integrating the output rows
+                    dynamic_headers = [el.strip().replace(" ", "_") for el in dynamic_headers]
+
+                    self.create_ml_table(dynamic_headers)  # Ensure table matches dynamic headers
+
+                    for row in csv_reader:
+                        if is_header:
+                            row_values = list(row.values())
+                        else:
+                            row_values = row
+                        self.insert_into_ml_data(config_id, nonlocal_bonds, nbeads, filename, row_values,
+                                                 dynamic_headers)
+            else:
+                print(f'File {csv_file_path} not found. Skipping.')
+        self.connection.commit()
+
+    def insert_into_ml_data(self, config_id, nonlocal_bonds, nbeads, filename, csv_row: List[str],
+                            csv_headers: List[str]):
+
+        columns = ", ".join(['ConfigID', 'nonlocal_bonds', 'nbeads', 'Filename', *csv_headers])
+        placeholders = ", ".join(['?'] * (len(csv_headers) + 4))
+        query = f"INSERT INTO {self.table_name} ({columns}) VALUES ({placeholders})"
+        values = [config_id, nonlocal_bonds, nbeads, filename, *csv_row]
+        self.cursor.execute(query, values)
+
