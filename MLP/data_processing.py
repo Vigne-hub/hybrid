@@ -5,12 +5,12 @@ import json
 from scipy.stats import skew, kurtosis
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
+from functools import cached_property
 
 
 class FoldingTransitionEntropyData:
     def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db'):
-        self.mlp_dataset = None
-        self.feature_names = None
+
         self._data = None
         self._database_file = database_file
         self.database_file = self._database_file
@@ -69,6 +69,12 @@ class FoldingTransitionEntropyData:
         df['nonlocal_bonds'] = df['nonlocal_bonds'].apply(lambda x: json.loads(x))
 
         return df
+
+
+class FoldingMLPData(FoldingTransitionEntropyData):
+    def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db'):
+        super(FoldingMLPData, self).__init__(database_file)
+        self.feature_names = None
 
     def calculate_features(self, row):
         # Jaccard similarity between state_i and state_j
@@ -129,12 +135,17 @@ class FoldingTransitionEntropyData:
 
         return normalized_degree_centrality
 
+    @cached_property
+    def mlp_data(self):
+        return self.generate_MLP_dataset()
+
     def generate_MLP_dataset(self):
         features = self.data.apply(self.calculate_features, axis=1)
 
         mlp_data = pd.concat([self.data, features], axis=1)
 
         mlp_data = mlp_data[self.feature_names + ['s_bias_mean']].dropna()
+
         return mlp_data
 
     def write_mlp_dataset_to_csv(self, file_path):
@@ -143,14 +154,10 @@ class FoldingTransitionEntropyData:
 
         :param file_path: The path of the CSV file where the dataset will be saved.
         """
-        # Ensure the MLP dataset is generated and stored
-        if self._data is None or not hasattr(self, 'mlp_dataset'):
-            print("Generating MLP dataset first...")
-            self.mlp_dataset = self.generate_MLP_dataset()
 
         # Write the dataset to a CSV file
         try:
-            self.mlp_dataset.to_csv(file_path, index=False)
+            self.mlp_data.to_csv(file_path, index=False)
             print(f"MLP dataset successfully written to {file_path}")
         except Exception as e:
             print(f"An error occurred while writing the MLP dataset to CSV: {e}")
@@ -158,6 +165,6 @@ class FoldingTransitionEntropyData:
 
 if __name__ == '__main__':
     # Assuming the correct database file path
-    fted = FoldingTransitionEntropyData()
-    mlp_dataset = fted.generate_MLP_dataset()
-    print(mlp_dataset.head())
+    mlp_dataset = FoldingMLPData()
+    print(mlp_dataset.mlp_data.head())
+    mlp_dataset.write_mlp_dataset_to_csv('mlp_dataset.csv')
