@@ -64,7 +64,7 @@ def integrate_csv_wrapper(settings_config_file):
     # path to the .db file in target directory
     db_path = target_directory / config.get('master_settings', 'database_name', fallback="configurations.db")
 
-    # open connection to thge database
+    # open connection to the database
     manager = MLDatabaseManager(db_path)
 
     # integrate the diff_s_bias data. These outputs do not have headers so include these manually

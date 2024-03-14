@@ -407,7 +407,8 @@ class MLDatabaseManager(DatabaseManager):
         self.cursor.execute('SELECT ID, nonlocal_bonds, nbeads, Filename FROM configurations')
         configurations = self.cursor.fetchall()
 
-        for config_id, nonlocal_bonds, nbeads, filename in configurations:
+        for config_id, nonlocal_bonds, nbeads, _ in configurations:
+            filename = f"config_{config_id}.csv"
             directory = os.path.join(search_path, filename.rstrip('.json'))
             csv_file_path = os.path.join(directory, csv_name)
             if os.path.isfile(csv_file_path):
@@ -439,6 +440,9 @@ class MLDatabaseManager(DatabaseManager):
                             row_values = row
                         self.insert_into_ml_data(config_id, nonlocal_bonds, nbeads, filename, row_values,
                                                  dynamic_headers)
+
+                print(f'File {csv_file_path} rows found. Processed.')
+
             else:
                 print(f'File {csv_file_path} not found. Skipping.')
         self.connection.commit()
