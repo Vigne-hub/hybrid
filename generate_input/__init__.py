@@ -445,6 +445,16 @@ class MLDatabaseManager(DatabaseManager):
 
     def insert_into_ml_data(self, config_id, nonlocal_bonds, nbeads, filename, csv_row: List[str],
                             csv_headers: List[str]):
+        """
+        Function to insert into an sql lite database the simulation result values from each csv file.
+        :param config_id:
+        :param nonlocal_bonds:
+        :param nbeads:
+        :param filename:
+        :param csv_row:
+        :param csv_headers:
+        :return:
+        """
 
         columns = ", ".join(['ConfigID', 'nonlocal_bonds', 'nbeads', 'Filename', *csv_headers])
         placeholders = ", ".join(['?'] * (len(csv_headers) + 4))
