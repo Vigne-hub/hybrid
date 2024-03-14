@@ -104,12 +104,10 @@ class ConfigGenerator:
 
         # Generate new files num files number of times
         for _ in range(self.num_files):
-            # initialize the row for writing to database with the id counter number
-            row = []
             counter = 0
             # limit of searching 1000 times for a new configuration
             while counter < N_tries_for_unique:
-                new_config = self.get_new_config(row)
+                row, new_config = self.get_new_config()
 
                 # stop looking for more configurations if the new config was found to be unique
                 if new_config not in self._configs:
@@ -126,6 +124,9 @@ class ConfigGenerator:
             self._configs.append(new_config)
             filename = f"config_{self.id_counter}.json"
             row.append(filename)
+            if row[2][0] != 'c':
+                print(row)
+
             data.append(row)
 
             with open(os.path.join(self.target_directory, filename), 'w') as json_file:
@@ -135,9 +136,10 @@ class ConfigGenerator:
 
         self._update_database(data)
 
-    def get_new_config(self, row):
-        # initialize new file based on template base config
+    def get_new_config(self):
+        # initialize new file based on template base config, and a new row list
         new_config = self._base_config.copy()
+        output_row = []
 
         # iterate through all the parameter keys and its values in param settings
         for param, settings in self.param_settings.items():
@@ -146,8 +148,10 @@ class ConfigGenerator:
             if param == "rc":
                 new_config["nonlocal_bonds"] = self._randomize_rcs(new_config["nonlocal_bonds"], settings)
 
+                if len(output_row) != 0:
+                    print(output_row)
                 # append value for nonlocal bonds to the row for this file
-                row.append(str(new_config["nonlocal_bonds"]))
+                output_row.append(str(new_config["nonlocal_bonds"]))
 
             else:
 
@@ -161,9 +165,11 @@ class ConfigGenerator:
                     new_config[param] = random.choice(settings['values'])
 
                 # append value for this param to the row for this file
-                row.append(new_config[param])
+                output_row.append(new_config[param])
 
-        return new_config
+        if len(output_row) != 2:
+            print(output_row)
+        return output_row, new_config
 
     @staticmethod
     def _randomize_rcs(nonlocal_bonds, settings) -> list[list[Any]]:
@@ -407,8 +413,12 @@ class MLDatabaseManager(DatabaseManager):
         self.cursor.execute('SELECT ID, nonlocal_bonds, nbeads, Filename FROM configurations')
         configurations = self.cursor.fetchall()
 
-        for config_id, nonlocal_bonds, nbeads, _ in configurations:
-            filename = f"config_{config_id}.csv"
+        for config_id, nonlocal_bonds, nbeads, filename in configurations:
+
+            # ensure validity of filename, if not use the config_id
+            if 'config' not in filename:
+                filename = f"config_{config_id}.csv"
+
             directory = os.path.join(search_path, filename.rstrip('.json'))
             csv_file_path = os.path.join(directory, csv_name)
             if os.path.isfile(csv_file_path):
