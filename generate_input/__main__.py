@@ -1,10 +1,15 @@
-from typing import List
-
+import os
+from pathlib import Path
 from . import ConfigGeneratorDriver, SubmitConfigJob, MLDatabaseManager
 import configparser
 
 
 def run_generation(gen, submit, create_job_script, integrate_output):
+
+    # everything is done assuming the working directory is where the module is located.
+    # TODO: Generalize this before publishing.
+    os.chdir(Path(__file__).parent)
+
     if not (gen or submit or create_job_script):
         if integrate_output:
             integrate_csv_wrapper(settings_config_file="settings.cfg")
