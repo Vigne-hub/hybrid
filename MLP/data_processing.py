@@ -79,41 +79,6 @@ class FoldingMLPData(FoldingTransitionEntropyData):
         self.generated_feature_names = None
 
     def calculate_features(self, row):
-        # # Jaccard similarity between state_i and state_j
-        # state_i_set = set(tuple(x) for x in row['state_i'])
-        # state_j_set = set(tuple(x) for x in row['state_j'])
-        # jaccard_sim = len(state_i_set.intersection(state_j_set)) / len(
-        #     state_i_set.union(state_j_set)) if state_i_set or state_j_set else 0
-        #
-        # # Preparing vectors for cosine similarity calculations with the final state
-        # weights_final = np.array([bond[2] for bond in row['nonlocal_bonds']])
-        # bond_index_map = {tuple(bond[:2]): idx for idx, bond in enumerate(row['nonlocal_bonds'])}
-        # weights_vector_i = np.zeros(len(row['nonlocal_bonds']))
-        # weights_vector_j = np.zeros(len(row['nonlocal_bonds']))
-        #
-        # for bond in row['state_i']:
-        #     idx = bond_index_map.get(tuple(bond[:2]))
-        #     if idx is not None:
-        #         weights_vector_i[idx] = bond[2]
-        # for bond in row['state_j']:
-        #     idx = bond_index_map.get(tuple(bond[:2]))
-        #     if idx is not None:
-        #         weights_vector_j[idx] = bond[2]
-        #
-        # # Normalizing weight vectors for cosine similarity
-        # weights_vector_i_norm = normalize([weights_vector_i])[0]
-        # weights_vector_j_norm = normalize([weights_vector_j])[0]
-        # final_bond_weights_norm = normalize([weights_final])[0]
-        #
-        # # Cosine similarity differences between states and the final state
-        # cosine_diff_i_final = cosine_similarity([weights_vector_i_norm], [final_bond_weights_norm])[0][0]
-        # cosine_diff_j_final = cosine_similarity([weights_vector_j_norm], [final_bond_weights_norm])[0][0]
-        # cosine_diff_i_j = cosine_similarity([weights_vector_i_norm], [weights_vector_j_norm])[0][0]
-        #
-        # # Normalized Degree Centrality for state_i and state_j
-        # normalized_degree_cent_i = self.calculate_normalized_degree_centrality(row['state_i'], row['nbeads'])
-        # normalized_degree_cent_j = self.calculate_normalized_degree_centrality(row['state_j'], row['nbeads'])
-        # diff_normalized_degree_cent = abs(normalized_degree_cent_i - normalized_degree_cent_j)
 
         state_i_int = int(row['state_i_bits'], base=2)
         state_j_int = int(row['state_j_bits'], base=2)
@@ -172,4 +137,4 @@ if __name__ == '__main__':
     # Assuming the correct database file path
     mlp_dataset = FoldingMLPData()
     print(mlp_dataset.mlp_data.head())
-   # mlp_dataset.write_mlp_dataset_to_csv('mlp_dataset_simple_nonbeads.csv')
+    mlp_dataset.write_mlp_dataset_to_csv('mlp_dataset.csv')

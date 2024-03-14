@@ -2,19 +2,23 @@ from typing import List
 
 from . import ConfigGeneratorDriver, SubmitConfigJob, MLDatabaseManager
 import configparser
+from pathlib import Path
 
 
 def run_generation(gen, submit, create_job_script, integrate_output):
+
+    # get the settings file from the module directory for the actions to be done.
+    settings_config_file = Path(__file__).parent / "settings.cfg"
     if not (gen or submit or create_job_script):
         if integrate_output:
-            integrate_csv_wrapper(settings_config_file="settings.cfg")
+            integrate_csv_wrapper(settings_config_file=settings_config_file)
         else:
             from sys import exit
             exit("Nothing to do. Please pass argument to indicate what to do.")
 
     if args.gen:
         # Generate some configurations
-        config_generator = ConfigGeneratorDriver(settings_config_file="settings.cfg")
+        config_generator = ConfigGeneratorDriver(settings_config_file=settings_config_file)
         config_generator.generate_configs()
 
     if submit or create_job_script:
@@ -23,7 +27,7 @@ def run_generation(gen, submit, create_job_script, integrate_output):
         config = configparser.ConfigParser()
 
         # submit job to slurm for these configs
-        jobsubmitter = SubmitConfigJob(settings_config_file="settings.cfg")
+        jobsubmitter = SubmitConfigJob(settings_config_file=settings_config_file)
 
         if args.submit:
             jobsubmitter.submit_job()
