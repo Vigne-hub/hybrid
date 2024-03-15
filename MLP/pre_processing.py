@@ -212,7 +212,7 @@ class FoldingMLPDataMFPT(FoldingMLPData):
 
         # Create DataLoader
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size)
+        val_loader = DataLoader(val_dataset, batch_size=1)
 
         return train_loader, val_loader, self.generated_feature_names, target_columns, scaler
 

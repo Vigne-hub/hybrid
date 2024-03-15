@@ -20,13 +20,12 @@ def main(csv='mlp_dataset_simple_nbeads=30_withmfpt_2.csv'):
     )
 
     # Initialize the module
-    model = MLPModule(features, targets, hidden_dims=[2 * len(features), 4], scaler=scaler)
+    model = MLPModule(features, targets, hidden_dims=[5, 2], scaler=scaler)
 
     # Initialize the trainer
     trainer = L.Trainer(deterministic=True, max_epochs=100,
 
                         callbacks=[EarlyStopping(monitor='val_loss', patience=5, verbose=True),
-                                   LearningRateMonitor(logging_interval='step')
 
                                    ])
     # Train the model
