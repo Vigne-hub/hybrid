@@ -68,7 +68,7 @@ def integrate_csv_wrapper(settings_config_file):
     manager = MLDatabaseManager(db_path)
 
     # integrate the diff_s_bias data. These outputs do not have headers so include these manually
-    manager.integrate_csv_data(csv_name="diff_s_bias.csv", search_path=out_dir,
+    manager.integrate_csv_data_parallel(csv_name="diff_s_bias.csv", search_path=out_dir,
                                csv_headers=
                                ["state i bits", "state j bits", "s bias mean", "std error", "ci low", "ci high"])
 

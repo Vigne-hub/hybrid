@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import csv
 from string import ascii_uppercase
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class ConfigGenerator:
@@ -456,6 +457,57 @@ class MLDatabaseManager(DatabaseManager):
             else:
                 print(f'File {csv_file_path} not found. Skipping.')
         self.connection.commit()
+
+
+    def integrate_csv_data_parallel(self, csv_name: str, search_path: str, csv_headers: List[str] = None):
+        self.table_name = csv_name.replace(".csv", "")
+        if csv_headers is None:
+            csv_headers = list(ascii_uppercase)[:10]
+
+        configurations = self.cursor.execute('SELECT ID, nonlocal_bonds, nbeads, Filename FROM configurations').fetchall()
+
+        def process_configuration(config):
+            config_id, nonlocal_bonds, nbeads, filename = config
+
+            if 'config' not in filename:
+                filename = f"config_{config_id}.csv"
+
+            directory = os.path.join(search_path, filename.rstrip('.json'))
+            csv_file_path = os.path.join(directory, csv_name)
+
+            if os.path.isfile(csv_file_path):
+                with open(csv_file_path, 'r') as file:
+                    first_line = file.readline().strip().replace(" ", "")
+                    file.seek(0)
+
+                    is_header = all(item.isalpha() for item in first_line.split(','))
+                    if is_header:
+                        csv_reader = csv.DictReader(file)
+                        dynamic_headers = csv_reader.fieldnames
+                    else:
+                        file.seek(0)
+                        csv_reader = csv.reader(file)
+                        dynamic_headers = csv_headers
+
+                    dynamic_headers = [el.strip().replace(" ", "_") for el in dynamic_headers]
+                    for row in csv_reader:
+                        if is_header:
+                            row_values = list(row.values())
+                        else:
+                            row_values = row
+                        self.insert_into_ml_data(config_id, nonlocal_bonds, nbeads, filename, row_values, dynamic_headers)
+                return f'File {csv_file_path} processed.'
+            else:
+                return f'File {csv_file_path} not found. Skipping.'
+
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(process_configuration, config) for config in configurations]
+            for future in as_completed(futures):
+                print(future.result())
+
+        self.connection.commit()
+
+
 
     def insert_into_ml_data(self, config_id, nonlocal_bonds, nbeads, filename, csv_row: List[str],
                             csv_headers: List[str]):
