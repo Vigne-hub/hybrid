@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from . import ConfigGeneratorDriver, SubmitConfigJob, MLDatabaseManager
+from . import ConfigGeneratorDriver, SubmitConfigJob, MLDatabaseManager, MLDatabaseManagerParallel
 import configparser
 
 
@@ -65,10 +65,10 @@ def integrate_csv_wrapper(settings_config_file):
     db_path = target_directory / config.get('master_settings', 'database_name', fallback="configurations.db")
 
     # open connection to the database
-    manager = MLDatabaseManager(db_path)
+    manager = MLDatabaseManagerParallel(db_path)
 
     # integrate the diff_s_bias data. These outputs do not have headers so include these manually
-    manager.integrate_csv_data_parallel(csv_name="diff_s_bias.csv", search_path=out_dir,
+    manager.integrate_csv_data(csv_name="diff_s_bias.csv", search_path=out_dir,
                                csv_headers=
                                ["state i bits", "state j bits", "s bias mean", "std error", "ci low", "ci high"])
 

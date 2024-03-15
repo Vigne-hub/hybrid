@@ -3,7 +3,7 @@ import json
 import random
 import os
 import warnings
-from functools import cached_property
+from functools import cached_property, partial
 from typing import Any, Dict, List
 import sqlite3
 import subprocess
@@ -375,7 +375,6 @@ sacct -j $SLURM_JOB_ID
 
 class SubmitConfigJob(JobSubmitter):
     def __init__(self, settings_config_file="settings.cfg"):
-
         job_config = configparser.ConfigParser()
         job_config.read(settings_config_file)
 
@@ -414,100 +413,54 @@ class MLDatabaseManager(DatabaseManager):
         self.cursor.execute('SELECT ID, nonlocal_bonds, nbeads, Filename FROM configurations')
         configurations = self.cursor.fetchall()
 
-        for config_id, nonlocal_bonds, nbeads, filename in configurations:
-
-            # ensure validity of filename, if not use the config_id
-            if 'config' not in filename:
-                filename = f"config_{config_id}.csv"
-
-            directory = os.path.join(search_path, filename.rstrip('.json'))
-            csv_file_path = os.path.join(directory, csv_name)
-            if os.path.isfile(csv_file_path):
-                with open(csv_file_path, 'r') as file:
-                    first_line = file.readline().strip().replace(" ", "")
-                    file.seek(0)  # Reset file pointer to the beginning
-
-                    # Check if the first line matches expected headers or is alphabetical
-                    is_header = all(item.isalpha() for item in first_line.split(','))
-
-                    # If detected header, use it; otherwise, use provided/default headers
-                    if is_header:
-                        csv_reader = csv.DictReader(file)
-                        dynamic_headers = csv_reader.fieldnames
-                    else:
-                        file.seek(0)  # Reset again for csv.reader since no header row
-                        csv_reader = csv.reader(file)
-                        dynamic_headers = csv_headers
-
-                    # format the headers before creating the table and integrating the output rows
-                    dynamic_headers = [el.strip().replace(" ", "_") for el in dynamic_headers]
-
-                    self.create_ml_table(dynamic_headers)  # Ensure table matches dynamic headers
-
-                    for row in csv_reader:
-                        if is_header:
-                            row_values = list(row.values())
-                        else:
-                            row_values = row
-                        self.insert_into_ml_data(config_id, nonlocal_bonds, nbeads, filename, row_values,
-                                                 dynamic_headers)
-
-                print(f'File {csv_file_path} rows found. Processed.')
-
-            else:
-                print(f'File {csv_file_path} not found. Skipping.')
-        self.connection.commit()
-
-
-    def integrate_csv_data_parallel(self, csv_name: str, search_path: str, csv_headers: List[str] = None):
-        self.table_name = csv_name.replace(".csv", "")
-        if csv_headers is None:
-            csv_headers = list(ascii_uppercase)[:10]
-
-        configurations = self.cursor.execute('SELECT ID, nonlocal_bonds, nbeads, Filename FROM configurations').fetchall()
-
-        def process_configuration(config):
-            config_id, nonlocal_bonds, nbeads, filename = config
-
-            if 'config' not in filename:
-                filename = f"config_{config_id}.csv"
-
-            directory = os.path.join(search_path, filename.rstrip('.json'))
-            csv_file_path = os.path.join(directory, csv_name)
-
-            if os.path.isfile(csv_file_path):
-                with open(csv_file_path, 'r') as file:
-                    first_line = file.readline().strip().replace(" ", "")
-                    file.seek(0)
-
-                    is_header = all(item.isalpha() for item in first_line.split(','))
-                    if is_header:
-                        csv_reader = csv.DictReader(file)
-                        dynamic_headers = csv_reader.fieldnames
-                    else:
-                        file.seek(0)
-                        csv_reader = csv.reader(file)
-                        dynamic_headers = csv_headers
-
-                    dynamic_headers = [el.strip().replace(" ", "_") for el in dynamic_headers]
-                    for row in csv_reader:
-                        if is_header:
-                            row_values = list(row.values())
-                        else:
-                            row_values = row
-                        self.insert_into_ml_data(config_id, nonlocal_bonds, nbeads, filename, row_values, dynamic_headers)
-                return f'File {csv_file_path} processed.'
-            else:
-                return f'File {csv_file_path} not found. Skipping.'
-
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process_configuration, config) for config in configurations]
-            for future in as_completed(futures):
-                print(future.result())
+        for config in configurations:
+            self.process_configuration(config, csv_headers, csv_name, search_path)
 
         self.connection.commit()
 
+    def process_configuration(self, config, csv_headers, csv_name, search_path):
 
+        config_id, nonlocal_bonds, nbeads, filename = config
+
+        # ensure validity of filename, if not use the config_id
+        if 'config' not in filename:
+            filename = f"config_{config_id}.csv"
+        directory = os.path.join(search_path, filename.rstrip('.json'))
+        csv_file_path = os.path.join(directory, csv_name)
+        if os.path.isfile(csv_file_path):
+            with open(csv_file_path, 'r') as file:
+                first_line = file.readline().strip().replace(" ", "")
+                file.seek(0)  # Reset file pointer to the beginning
+
+                # Check if the first line matches expected headers or is alphabetical
+                is_header = all(item.isalpha() for item in first_line.split(','))
+
+                # If detected header, use it; otherwise, use provided/default headers
+                if is_header:
+                    csv_reader = csv.DictReader(file)
+                    dynamic_headers = csv_reader.fieldnames
+                else:
+                    file.seek(0)  # Reset again for csv.reader since no header row
+                    csv_reader = csv.reader(file)
+                    dynamic_headers = csv_headers
+
+                # format the headers before creating the table and integrating the output rows
+                dynamic_headers = [el.strip().replace(" ", "_") for el in dynamic_headers]
+
+                self.create_ml_table(dynamic_headers)  # Ensure table matches dynamic headers
+
+                for row in csv_reader:
+                    if is_header:
+                        row_values = list(row.values())
+                    else:
+                        row_values = row
+                    self.insert_into_ml_data(config_id, nonlocal_bonds, nbeads, filename, row_values,
+                                             dynamic_headers)
+
+            print(f'File {csv_file_path} rows found. Processed.')
+
+        else:
+            print(f'File {csv_file_path} not found. Skipping.')
 
     def insert_into_ml_data(self, config_id, nonlocal_bonds, nbeads, filename, csv_row: List[str],
                             csv_headers: List[str]):
@@ -528,3 +481,65 @@ class MLDatabaseManager(DatabaseManager):
         values = [config_id, nonlocal_bonds, nbeads, filename, *csv_row]
         self.cursor.execute(query, values)
 
+
+class MLDatabaseManagerParallel(MLDatabaseManager):
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+
+    def create_ml_table(self, csv_headers: List[str]):
+        # Create a new connection for this method
+        connection = sqlite3.connect(self.db_path)
+        cursor = connection.cursor()
+
+        csv_columns = ", ".join([f'"{header}" TEXT' for header in csv_headers])
+        cursor.execute(f'''
+             CREATE TABLE IF NOT EXISTS {self.table_name} (
+                 "ConfigID" INTEGER,
+                 "nonlocal_bonds" TEXT,
+                 "nbeads" INTEGER,
+                 "Filename" TEXT,
+                 {csv_columns},
+                 FOREIGN KEY("ConfigID") REFERENCES configurations(ID)
+             )
+         ''')
+        connection.commit()
+        connection.close()
+
+    def insert_into_ml_data(self, config_id, nonlocal_bonds, nbeads, filename, csv_row: List[str],
+                            csv_headers: List[str]):
+        # This method now creates a new database connection for each insert
+        connection = sqlite3.connect(self.db_path)
+        cursor = connection.cursor()
+
+        columns = ", ".join(
+            ['"ConfigID"', '"nonlocal_bonds"', '"nbeads"', '"Filename"', *map(lambda x: f'"{x}"', csv_headers)])
+        placeholders = ", ".join(['?'] * (len(csv_headers) + 4))
+        query = f"INSERT INTO {self.table_name} ({columns}) VALUES ({placeholders})"
+        values = [config_id, nonlocal_bonds, nbeads, filename, *csv_row]
+
+        cursor.execute(query, values)
+        connection.commit()
+        connection.close()
+
+    def integrate_csv_data(self, csv_name: str, search_path: str, csv_headers: List[str] = None):
+        self.table_name = csv_name.replace(".csv", "")
+        if csv_headers is None:
+            csv_headers = list(ascii_uppercase)[:10]
+
+        # Create connection to fetch configurations
+        connection = sqlite3.connect(self.db_path)
+        cursor = connection.cursor()
+        cursor.execute('SELECT ID, nonlocal_bonds, nbeads, Filename FROM configurations')
+        configurations = cursor.fetchall()
+        connection.close()  # Close the connection after fetching configurations
+
+        fixed_process_configuration = partial(self.process_configuration, csv_headers=csv_headers, csv_name=csv_name,
+                                              search_path=search_path)
+
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(fixed_process_configuration, config) for config in configurations]
+
+        # No need to commit here since each insert commits its transaction
+
+    def close(self):
+        pass
