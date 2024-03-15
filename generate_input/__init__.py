@@ -121,19 +121,23 @@ class ConfigGenerator:
                 warnings.warn("Too many attempts to generate a new configuration. Stopping now", RuntimeWarning)
                 break
 
+            # Store new configuration in the overall configs list, so it is not duplicated
             self._configs.append(new_config)
+
+            # add the filename to the row
             filename = f"config_{self.id_counter}.json"
             row.append(filename)
-            if row[2][0] != 'c':
-                print(row)
 
+            # add the new row to the overall dataset
             data.append(row)
 
+            #  write the new configuration to a json file for running simulations
             with open(os.path.join(self.target_directory, filename), 'w') as json_file:
                 json.dump(new_config, json_file, indent=4)
 
             self.id_counter += 1
 
+        # Update the database to have the new data.
         self._update_database(data)
 
     def get_new_config(self):
@@ -148,8 +152,6 @@ class ConfigGenerator:
             if param == "rc":
                 new_config["nonlocal_bonds"] = self._randomize_rcs(new_config["nonlocal_bonds"], settings)
 
-                if len(output_row) != 0:
-                    print(output_row)
                 # append value for nonlocal bonds to the row for this file
                 output_row.append(str(new_config["nonlocal_bonds"]))
 
@@ -167,8 +169,6 @@ class ConfigGenerator:
                 # append value for this param to the row for this file
                 output_row.append(new_config[param])
 
-        if len(output_row) != 2:
-            print(output_row)
         return output_row, new_config
 
     @staticmethod

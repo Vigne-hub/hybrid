@@ -2,6 +2,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 
 
 def density_plot():
@@ -28,26 +29,48 @@ def density_plot():
     plt.show()
 
 
-#density_plot()
+def linearplot_transition_colored_dynamic(csv='data_with_predictions_27.csv', outfile="transition_colored.png"):
+    # Load the dataset
+    df = pd.read_csv(csv)
 
-df = pd.read_csv('data_with_predictions_12.csv')
+    # Create a new column for the combination of state_i and state_j as a tuple, then convert to string
+    df['State_Combination'] = list(zip(df['state_i_int'].astype(int), df['state_j_int'].astype(int)))
+    df['State_Combination'] = df['State_Combination'].astype(str)
 
-# Create a new column for the combination of state_i and state_j as a tuple
-df['State_Combination'] = list(zip(df.state_i, df.state_j))
-df['State_Combination'] = df['State_Combination'].astype(str)  # Convert to string for categorical coloring
+    # List of possible features to plot
+    features_to_plot = ['s_bias_mean', 'outer_fpt', 'inner_fpt']
+    available_features = [f for f in features_to_plot if f + '_pred' in df.columns and f + '_actual' in df.columns]
 
-# Plotting the scatter plot for Predictions vs. Actuals
-fig, ax = plt.subplots(figsize=(10, 6))
+    # Determine the number of plots needed based on available features
+    num_plots = len(available_features)
+    if num_plots == 0:
+        print("No features available for plotting.")
+        return
 
-sns.scatterplot(data=df, x="Predictions", y="Actuals", hue="State_Combination", palette="viridis", alpha=0.6, ax=ax)
+    # Create a figure with appropriate subplots
+    fig, axs = plt.subplots(1, num_plots, figsize=(10 * num_plots, 6))  # Adjust figure size dynamically
 
-x = np.linspace(0, df.Predictions.max())
-y = x
-sns.lineplot(x=x, y=y, ax=ax, color="black")
+    if num_plots == 1:
+        axs = [axs]  # Make axs a list if only one plot
 
-fig.title("Scatter Plot of Actuals vs. Predictions by State Combination")
-fig.xlabel("Predictions")
-fig.ylabel("Actuals")
-fig.tight_layout()
-fig.legend(title='State Combination')
-fig.show()
+    # Define a function to plot the scatterplot and identity line
+    def plot_scatter_identity(ax, x, y, hue, data):
+        sns.scatterplot(x=x, y=y, hue=hue, data=data, palette="viridis", alpha=0.6, ax=ax)
+        identity_line = np.linspace(data[x].min(), data[x].max(), 100)
+        sns.lineplot(x=identity_line, y=identity_line, color="black", ax=ax)
+        ax.set_xlabel(f"Predictions of {x.split('_')[0]}")
+        ax.set_ylabel(f"Actuals of {y.split('_')[0]}")
+
+    # Plot each of the available features
+    for ax, feature in zip(axs, available_features):
+        plot_scatter_identity(ax, f"{feature}_pred", f"{feature}_actual", 'State_Combination', df)
+
+    # Unified title and legend
+    fig.suptitle("Predictions vs. Actuals", fontsize=16)
+    #handles, labels = axs[0].get_legend_handles_labels()
+    #fig.legend(handles, labels, loc='upper right')
+    plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust the layout to make room for the title
+
+    # Show and save the figure
+    plt.show()
+    fig.savefig(outfile)
