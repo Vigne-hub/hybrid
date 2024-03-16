@@ -38,11 +38,12 @@ def run_generation(gen, submit, create_job_script, integrate_output):
             print(f"Shell script in {jobsubmitter.temp_script_path}")
 
 
-def integrate_csv_wrapper(settings_config_file):
+def integrate_csv_wrapper(settings_config_file, serial=0):
     """
     Function to integrate the various csv outputs from hybridmc like diff_sbias and avg_s_bias from the simulation
     output directory for that structure, to the configuration database file with it.
 
+    :param serial:
     :param settings_config_file: Path to the settings configuration files,
     setting_config_file should have the following parameters:
 
@@ -61,21 +62,27 @@ def integrate_csv_wrapper(settings_config_file):
     # path to directory with hybridmc simulation result directories for each structure run
     out_dir = config.get('slurm_settings', 'out_dir', fallback="sample_train")
 
-    # path to the .db file in target directory
-    db_path = target_directory / config.get('master_settings', 'database_name', fallback="configurations.db")
-
-    # open connection to the database
-    manager = MLDatabaseManagerParallel(db_path)
+    if serial:
+        # open connection to the database
+        manager = MLDatabaseManager(target_directory / config.get('master_settings', 'database_name', fallback="configurations.db"))
+    else:
+        manager = MLDatabaseManagerParallel(target_directory)
 
     # integrate the diff_s_bias data. These outputs do not have headers so include these manually
     manager.integrate_csv_data(csv_name="diff_s_bias.csv", search_path=out_dir,
                                csv_headers=
-                               ["state i bits", "state j bits", "s bias mean", "std error", "ci low", "ci high"])
+                               ["state i bits", "state j bits", "s bias mean", "std error", "ci low", "ci high"],
+                               csv_header_in_file=False)
 
     # integrate the mfpt data.
-    manager.integrate_csv_data(csv_name="mfpt.csv", search_path=out_dir)
+    manager.integrate_csv_data(csv_name="mfpt.csv", search_path=out_dir,
+                               csv_headers=
+                               ["state i bits", "state j bits", "layer", "inner fpt", "outer fpt", "inner std", "outer std"],
+                               csv_header_in_file=True
+                               )
 
-    manager.close()
+    if serial:
+        manager.close()
 
 
 def main(job_args):

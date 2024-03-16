@@ -11,6 +11,8 @@ import tempfile
 import csv
 from string import ascii_uppercase
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import pandas as pd
+from pathlib import Path
 
 
 class ConfigGenerator:
@@ -482,64 +484,51 @@ class MLDatabaseManager(DatabaseManager):
         self.cursor.execute(query, values)
 
 
-class MLDatabaseManagerParallel(MLDatabaseManager):
-    def __init__(self, db_path: str):
-        self.db_path = db_path
+class MLDatabaseManagerParallel:
+    def __init__(self, output_csv_path):
+        self.output_csv_path = Path(output_csv_path)
 
-    def create_ml_table(self, csv_headers: List[str]):
-        # Create a new connection for this method
-        connection = sqlite3.connect(self.db_path)
-        cursor = connection.cursor()
+    @staticmethod
+    def extract_info_from_json(json_path):
+        try:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+            return data.get('nonlocal_bonds'), data.get('nbeads')
+        except FileNotFoundError:
+            print(f"JSON file {json_path} not found!")
+            return None, None
 
-        csv_columns = ", ".join([f'"{header}" TEXT' for header in csv_headers])
-        cursor.execute(f'''
-             CREATE TABLE IF NOT EXISTS {self.table_name} (
-                 "ConfigID" INTEGER,
-                 "nonlocal_bonds" TEXT,
-                 "nbeads" INTEGER,
-                 "Filename" TEXT,
-                 {csv_columns},
-                 FOREIGN KEY("ConfigID") REFERENCES configurations(ID)
-             )
-         ''')
-        connection.commit()
-        connection.close()
+    def process_csv_and_write(self, target_directory, csv_name, json_directory, csv_headers_in_file):
+        json_path = Path(json_directory) / f"{target_directory.name}.json"
+        nonlocal_bonds, nbeads = self.extract_info_from_json(json_path)
 
-    def insert_into_ml_data(self, config_id, nonlocal_bonds, nbeads, filename, csv_row: List[str],
-                            csv_headers: List[str]):
-        # This method now creates a new database connection for each insert
-        connection = sqlite3.connect(self.db_path)
-        cursor = connection.cursor()
+        csv_file_path = target_directory / csv_name
+        header = 0 if csv_headers_in_file else None
 
-        columns = ", ".join(
-            ['"ConfigID"', '"nonlocal_bonds"', '"nbeads"', '"Filename"', *map(lambda x: f'"{x}"', csv_headers)])
-        placeholders = ", ".join(['?'] * (len(csv_headers) + 4))
-        query = f"INSERT INTO {self.table_name} ({columns}) VALUES ({placeholders})"
-        values = [config_id, nonlocal_bonds, nbeads, filename, *csv_row]
+        if csv_file_path.is_file():
+            for chunk in pd.read_csv(csv_file_path, chunksize=100, header=header):
+                chunk['nonlocal_bonds'] = [nonlocal_bonds] * len(chunk)
+                chunk['nbeads'] = [nbeads] * len(chunk)
+                chunk.to_csv(self.output_csv_path / f"all_{csv_name}", mode='a', index=False, header=not csv_file_path.exists())
+            print(f'Processed and wrote data from {csv_file_path}')
+        else:
+            print(f'CSV file not found: {csv_file_path}')
 
-        cursor.execute(query, values)
-        connection.commit()
-        connection.close()
+    @staticmethod
+    def create_blank_csv_with_header(csv_file_path, headers):
+        with open(csv_file_path, 'w', newline='') as csvfile:
+            csvfile.write(','.join(headers + ["nonlocal_bonds"] + ["nbeads"]) + '\n')
 
-    def integrate_csv_data(self, csv_name: str, search_path: str, csv_headers: List[str] = None):
-        self.table_name = csv_name.replace(".csv", "")
-        if csv_headers is None:
-            csv_headers = list(ascii_uppercase)[:10]
+    def integrate_csv_data(self, search_path, csv_name, csv_headers, csv_header_in_file):
+        output_csv = self.output_csv_path / f"all_{csv_name}"
+        self.create_blank_csv_with_header(output_csv, csv_headers)
 
-        # Create connection to fetch configurations
-        connection = sqlite3.connect(self.db_path)
-        cursor = connection.cursor()
-        cursor.execute('SELECT ID, nonlocal_bonds, nbeads, Filename FROM configurations')
-        configurations = cursor.fetchall()
-        connection.close()  # Close the connection after fetching configurations
+        directories = [d for d in Path(search_path).iterdir() if d.is_dir()]
 
-        fixed_process_configuration = partial(self.process_configuration, csv_headers=csv_headers, csv_name=csv_name,
-                                              search_path=search_path)
+        process_func = partial(self.process_csv_and_write,
+                               csv_name=csv_name,
+                               json_directory=self.output_csv_path,
+                               csv_headers_in_file=csv_header_in_file)
 
         with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(fixed_process_configuration, config) for config in configurations]
-
-        # No need to commit here since each insert commits its transaction
-
-    def close(self):
-        pass
+            list(executor.map(process_func, directories))
