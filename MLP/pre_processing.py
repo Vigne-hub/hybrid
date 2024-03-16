@@ -135,7 +135,7 @@ class FoldingMLPData(FoldingTransitionEntropyData):
 
 class FoldingMLPDataMFPT(FoldingMLPData):
     def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db', table_name="merged_table_2",
-                 target_columns=tuple(['s_bias_mean'])):
+                 target_columns=tuple(['s_bias_mean', 'outer_fpt', 'inner_fpt'])):
 
         self.generated_feature_names = None
         self.target_columns = target_columns

@@ -4,11 +4,16 @@ from models import MLPModule
 from pre_processing import FoldingMLPData, FoldingMLPDataMFPT
 
 
-def main(csv='mlp_dataset_simple_nbeads=30_withmfpt_2.csv'):
+def main(csv='mlp_dataset_simple_nbeads=30_withmfpt_2.csv', write=1, target_columns=None):
     # Assuming the correct database file path
     mlp_dataset = FoldingMLPDataMFPT()
     print(mlp_dataset.mlp_data.head())
-    mlp_dataset.write_mlp_dataset_to_csv(csv)
+
+    if write:
+        mlp_dataset.write_mlp_dataset_to_csv(csv)
+
+    if target_columns is not None:
+        mlp_dataset.target_columns = [el for el in target_columns]
 
     train_loader, val_loader, features, targets, scaler = (
 
@@ -69,7 +74,7 @@ def post_process_checkpoint(checkpoint_path, version=4, csv="mlp_dataset_simple_
 
 
 if __name__ == '__main__':
-    main(csv="mlp_dataset_simple_nbeads=30_withmfpt_2.csv")
+    main(csv="mlp_dataset_simple_nbeads=30_withmfpt_2.csv", write=0, target_columns=['outer_fpt'])
     # post_process("/cptg/u4/vrajesh/Documents/Margarita_project/hybridmc_ML/MLP/lightning_logs/version_27/checkpoints/epoch=41-step=118104.ckpt",
     #   version=27, csv="mlp_dataset_simple_nbeads=30_withmfpt_2.csv" )
     print('Done')
