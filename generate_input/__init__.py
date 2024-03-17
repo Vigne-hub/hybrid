@@ -509,6 +509,7 @@ class MLDatabaseManagerParallel:
             for chunk in pd.read_csv(csv_file_path, chunksize=100, header=header):
                 chunk['nonlocal_bonds'] = [nonlocal_bonds] * len(chunk)
                 chunk['nbeads'] = [nbeads] * len(chunk)
+                chunk['Config_Id'] = [target_directory.name.split('_')[-1]] * len(chunk)
                 chunk.to_csv(self.output_csv_path / f"all_{csv_name}", mode='a', index=False, header=not csv_file_path.exists())
             print(f'Processed and wrote data from {csv_file_path}')
         else:

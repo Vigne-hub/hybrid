@@ -14,7 +14,6 @@ import torch
 
 class FoldingTransitionEntropyData:
     def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db'):
-
         self._data = None
         self._database_file = database_file
         self.database_file = self._database_file
@@ -117,7 +116,6 @@ class FoldingMLPData(FoldingTransitionEntropyData):
 
         return mlp_data
 
-
     def write_mlp_dataset_to_csv(self, file_path):
         """
         Writes the generated MLP dataset to a CSV file.
@@ -134,7 +132,8 @@ class FoldingMLPData(FoldingTransitionEntropyData):
 
 
 class FoldingMLPDataMFPT(FoldingMLPData):
-    def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db', table_name="merged_table_2",
+    def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db',
+                 table_name="merged_table_2",
                  target_columns=tuple(['s_bias_mean', 'outer_fpt', 'inner_fpt'])):
 
         self.generated_feature_names = None
@@ -176,7 +175,6 @@ class FoldingMLPDataMFPT(FoldingMLPData):
 
         return mlp_data
 
-
     def get_datasets(self, csv=None, query='nbeads == 30', val_size=0.2, batch_size=1, seed=42):
 
         # convert the target columns ot list to work better as pandas col index
@@ -186,7 +184,7 @@ class FoldingMLPDataMFPT(FoldingMLPData):
         seed_everything(seed, workers=True)
 
         if csv is not None:
-        # load data for the mlp regression
+            # load data for the mlp regression
             df = pd.read_csv(csv)
         else:
             df = self.mlp_data.copy()
