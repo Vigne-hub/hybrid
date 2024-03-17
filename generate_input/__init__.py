@@ -518,7 +518,7 @@ class MLDatabaseManagerParallel:
     @staticmethod
     def create_blank_csv_with_header(csv_file_path, headers):
         with open(csv_file_path, 'w', newline='') as csvfile:
-            csvfile.write(','.join(headers + ["nonlocal_bonds"] + ["nbeads"]) + '\n')
+            csvfile.write(','.join(headers + ["nonlocal_bonds"] + ["nbeads"] + ["Config_Id"]) + '\n')
 
     def integrate_csv_data(self, search_path, csv_name, csv_headers, csv_header_in_file):
         output_csv = self.output_csv_path / f"all_{csv_name}"
