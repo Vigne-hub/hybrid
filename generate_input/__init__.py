@@ -555,7 +555,7 @@ class MLDatabaseManagerParallel:
         # Establish a connection to the SQLite database
         with sqlite3.connect(db_path) as conn:
             # Load the CSV file into a pandas DataFrame
-            df = pd.read_csv(csv_path)
+            df = pd.read_csv(csv_path, dtype=str)
 
             # Replace spaces with underscores in DataFrame column names
             df.columns = [col.replace(' ', '_') for col in df.columns]

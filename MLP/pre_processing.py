@@ -50,6 +50,8 @@ class FoldingTransitionEntropyData:
         :param mask: str: a bitstring of 0s and 1s
         :return: a np.Array with the mask applied
         """
+
+
         # Convert the mask string into a boolean array
         bool_mask = np.array(list(mask)) == '1'
 
@@ -70,6 +72,7 @@ class FoldingTransitionEntropyData:
         conn.close()
         # Convert the 'nonlocal_bonds' column from JSON-formatted string to list
         df['nonlocal_bonds'] = df['nonlocal_bonds'].apply(lambda x: json.loads(x))
+
 
         return df
 
@@ -132,8 +135,8 @@ class FoldingMLPData(FoldingTransitionEntropyData):
 
 
 class FoldingMLPDataMFPT(FoldingMLPData):
-    def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db',
-                 table_name="merged_table_2",
+    def __init__(self, database_file='../generate_input/simulation_configs_25/configurations_25.db',
+                 table_name="merged_table",
                  target_columns=tuple(['s_bias_mean', 'outer_fpt', 'inner_fpt'])):
 
         self.generated_feature_names = None
@@ -175,7 +178,7 @@ class FoldingMLPDataMFPT(FoldingMLPData):
 
         return mlp_data
 
-    def get_datasets(self, csv=None, query='nbeads == 30', val_size=0.2, batch_size=1, seed=42):
+    def get_datasets(self, csv=None, query='nbeads == 25', val_size=0.2, batch_size=1, seed=42):
 
         # convert the target columns ot list to work better as pandas col index
         target_columns = list(self.target_columns)
@@ -219,5 +222,4 @@ if __name__ == '__main__':
     # Assuming the correct database file path
     mlp_dataset = FoldingMLPDataMFPT()
     print(mlp_dataset.mlp_data.head())
-    mlp_dataset.write_mlp_dataset_to_csv('mlp_dataset_simple_nbeads=30_withmfpt_2.csv')
-    mlp_dataset.get_dataset()
+    mlp_dataset.write_mlp_dataset_to_csv('mlp_dataset_nbeads=25.csv')
