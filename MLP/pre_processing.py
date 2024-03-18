@@ -73,7 +73,6 @@ class FoldingTransitionEntropyData:
         # Convert the 'nonlocal_bonds' column from JSON-formatted string to list
         df['nonlocal_bonds'] = df['nonlocal_bonds'].apply(lambda x: json.loads(x))
 
-
         return df
 
 
@@ -157,6 +156,18 @@ class FoldingMLPDataMFPT(FoldingMLPData):
         conn.close()
         # Convert the 'nonlocal_bonds' column from JSON-formatted string to list
         df['nonlocal_bonds'] = df['nonlocal_bonds'].apply(lambda x: json.loads(x))
+
+        # convert the state i and j bits to proper representation if they are not already
+
+        if 'int' in str(df.state_i_bits.dtype):
+            df["state_i_bits"] = df.apply(lambda row:
+                                          str(row["state_i_bits"]).rjust(len(row["nonlocal_bonds"]), '0'),
+                                          axis=1)
+
+        if 'int' in str(df.state_j_bits.dtype):
+            df["state_j_bits"] = df.apply(lambda row:
+                                          str(row["state_j_bits"]).rjust(len(row["nonlocal_bonds"]), '0'),
+                                          axis=1)
 
         return df
 
