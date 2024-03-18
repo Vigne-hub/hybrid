@@ -72,13 +72,16 @@ def integrate_csv_wrapper(settings_config_file, serial=0):
     manager.integrate_csv_data(csv_name="diff_s_bias.csv", search_path=out_dir,
                                csv_headers=
                                ["state i bits", "state j bits", "s bias mean", "std error", "ci low", "ci high"],
-                               csv_header_in_file=False)
+                               csv_header_in_file=False,
+                               db_name=config.get('master_settings', 'database_name', fallback="configurations.db")
+                               )
 
     # integrate the mfpt data.
     manager.integrate_csv_data(csv_name="mfpt.csv", search_path=out_dir,
                                csv_headers=
                                ["state i bits", "state j bits", "layer", "inner fpt", "outer fpt", "inner std", "outer std"],
-                               csv_header_in_file=True
+                               csv_header_in_file=True,
+                               db_name=config.get('master_settings', 'database_name', fallback="configurations.db")
                                )
 
     if serial:

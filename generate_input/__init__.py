@@ -485,8 +485,8 @@ class MLDatabaseManager(DatabaseManager):
 
 
 class MLDatabaseManagerParallel:
-    def __init__(self, output_csv_path):
-        self.output_csv_path = Path(output_csv_path)
+    def __init__(self, output_path):
+        self.output_path = Path(output_path)
 
     @staticmethod
     def extract_info_from_json(json_path):
@@ -506,11 +506,12 @@ class MLDatabaseManagerParallel:
         header = 0 if csv_headers_in_file else None
 
         if csv_file_path.is_file():
-            for chunk in pd.read_csv(csv_file_path, chunksize=100, header=header):
+            for chunk in pd.read_csv(csv_file_path, chunksize=100, header=header, dtype=str):
                 chunk['nonlocal_bonds'] = [nonlocal_bonds] * len(chunk)
                 chunk['nbeads'] = [nbeads] * len(chunk)
                 chunk['Config_Id'] = [target_directory.name.split('_')[-1]] * len(chunk)
-                chunk.to_csv(self.output_csv_path / f"all_{csv_name}", mode='a', index=False, header=not csv_file_path.exists())
+                chunk.to_csv(self.output_path / f"all_{csv_name}", mode='a', index=False,
+                             header=not csv_file_path.exists())
             print(f'Processed and wrote data from {csv_file_path}')
         else:
             print(f'CSV file not found: {csv_file_path}')
@@ -520,16 +521,44 @@ class MLDatabaseManagerParallel:
         with open(csv_file_path, 'w', newline='') as csvfile:
             csvfile.write(','.join(headers + ["nonlocal_bonds"] + ["nbeads"] + ["Config_Id"]) + '\n')
 
-    def integrate_csv_data(self, search_path, csv_name, csv_headers, csv_header_in_file):
-        output_csv = self.output_csv_path / f"all_{csv_name}"
+    def integrate_csv_data(self, search_path, csv_name, csv_headers, csv_header_in_file, db_name):
+
+        output_csv = self.output_path / f"all_{csv_name}"
+
         self.create_blank_csv_with_header(output_csv, csv_headers)
 
         directories = [d for d in Path(search_path).iterdir() if d.is_dir()]
 
         process_func = partial(self.process_csv_and_write,
                                csv_name=csv_name,
-                               json_directory=self.output_csv_path,
+                               json_directory=self.output_path,
                                csv_headers_in_file=csv_header_in_file)
 
         with ThreadPoolExecutor() as executor:
             list(executor.map(process_func, directories))
+
+        self.insert_csv_into_sqlite(db_path=self.output_path / db_name,
+                                    csv_path=output_csv,
+                                    table_name=csv_name.replace('.csv', ''),
+                                    if_exists='replace')
+
+    @staticmethod
+    def insert_csv_into_sqlite(db_path, csv_path, table_name, if_exists='replace'):
+        """
+        Inserts data from a CSV file into a SQLite database table.
+
+        :param db_path: Path to the SQLite database file.
+        :param csv_path: Path to the CSV file to be inserted.
+        :param table_name: Name of the table where the CSV data will be inserted.
+        :param if_exists: Action to take if the table already exists. Options are 'fail', 'replace', or 'append'.
+        """
+        # Establish a connection to the SQLite database
+        with sqlite3.connect(db_path) as conn:
+            # Load the CSV file into a pandas DataFrame
+            df = pd.read_csv(csv_path)
+
+            # Replace spaces with underscores in DataFrame column names
+            df.columns = [col.replace(' ', '_') for col in df.columns]
+
+            # Insert the DataFrame into the SQLite database
+            df.to_sql(name=table_name, con=conn, if_exists=if_exists, index=False)
