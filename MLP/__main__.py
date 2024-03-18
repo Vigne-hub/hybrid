@@ -74,7 +74,7 @@ def post_process_checkpoint(checkpoint_path, version=4, csv="mlp_dataset_simple_
 
 
 if __name__ == '__main__':
-    main(csv="mlp_dataset_simple_nbeads=30_withmfpt_2.csv", write=0, target_columns=['outer_fpt'])
+    main(csv="mlp_dataset_nbeads=25.csv", write=0, target_columns=['s_bias_mean', 'outer_fpt'])
     # post_process("/cptg/u4/vrajesh/Documents/Margarita_project/hybridmc_ML/MLP/lightning_logs/version_27/checkpoints/epoch=41-step=118104.ckpt",
     #   version=27, csv="mlp_dataset_simple_nbeads=30_withmfpt_2.csv" )
     print('Done')
