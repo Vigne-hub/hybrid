@@ -150,15 +150,17 @@ class ConfigGenerator:
         # Directly update new_config and build output_row in one go
         for param, settings in self.param_settings.items():
             value = self.randomize_param(new_config, param, settings)
-            output_row.append(value)
+            output_row.append(str(value))  # value is a string since it is needed for database writing
 
         return output_row, new_config
 
     def randomize_param(self, config, param, settings):
+
+        # exception for rc since it is not a seperate param, it is a part of nonlocal bonds.
         if param == "rc":
             randomized_values = self._randomize_rcs(config["nonlocal_bonds"], settings)
             config["nonlocal_bonds"] = randomized_values
-            return str(randomized_values)  # Kept as string since it is needed for output_row format
+            return randomized_values
 
         value = None
         if 'range' in settings:
@@ -193,6 +195,8 @@ class ConfigGeneratorDriver(ConfigGenerator):
 
         config = configparser.ConfigParser()
         config.read(settings_config_file)
+        self.new_patterns = config.get('master_settings', 'randomize_pattern', fallback="False").lower() in (
+        'true', '1', 't')
 
         # Load file master settings
         if 'master_settings' in config:
@@ -227,6 +231,78 @@ class ConfigGeneratorDriver(ConfigGenerator):
             N_tries_for_unique = self.N_tries_for_unique
 
         return self._generate_configs(N_tries_for_unique)
+
+    def get_new_config(self):
+        new_config = self.base_config.copy()
+        output_row = []
+
+        # randomize the bond indices in the original base configuration nonlocal bonds list if asked to
+        if self.new_patterns:
+            new_config["nonlocal_bonds"] = self.randomize_nonlocal_bonds(new_config["nonlocal_bonds"],
+                                                                         new_config["nbeads"])
+
+        # in case rc is asked not to be randomized, add this nonlocal bonds list to the output row now:
+        if "rc" not in self.param_settings:
+            output_row.append(new_config["nonlocal_bonds"])
+
+        # randomize the parameters surrounding the nonlocal bonds
+        for param, settings in self.param_settings.items():
+            value = self.randomize_param(new_config, param, settings)
+            output_row.append(str(value))  # value is a string since it is needed for database writing
+
+        return output_row, new_config
+
+    def randomize_nonlocal_bonds(self, nonlocal_bonds, bead_count):
+
+        updated_bonds = []
+        for bond in nonlocal_bonds:
+            # Unpack the existing bond to preserve the rc value
+            _, _, rc = bond
+
+            # Generate a random index1 between 0 and n_beads-1
+            index1 = random.randint(0, bead_count - 1)
+
+            # Calculate allowed values for index2, excluding nearest and next-nearest neighbors
+            excluded_indices = {(index1 + i) % bead_count for i in (-2, -1, 0, 1, 2)}
+            allowed_indices = set(range(bead_count)) - excluded_indices
+
+            # If no allowed indices are available (which may happen in small systems), skip this bond
+            if not allowed_indices:
+                continue
+
+            # Choose index2 from the allowed values
+            index2 = random.choice(list(allowed_indices))
+
+            # Update the bond with new indices while preserving rc
+            updated_bonds.append([index1, index2, rc])
+
+        # Format bonds in ascending order and return
+        return self.format_bonds(updated_bonds)
+
+    @staticmethod
+    def format_bonds(nonlocal_bonds):
+        """
+        Format the list of non-local bonds such that the smaller index comes first for each pair of indices
+        describing a bond and that the bond pair with the smaller first index comes first. So
+        [[22,3, rc], [11,3, rc], [9,4, rc ]] will become [[3, 11, rc], [3, 22, rc], [4, 9, rc]]
+        Parameters
+        ----------
+        nonlocal_bonds (List[List]): List containing the pairs of values describing different bonds
+
+        Returns
+        -------
+        Ordered list based on nonlocal bonds
+
+        """
+        # Step 1: Sort each bond pair while preserving the 'rc' value
+        sorted_bond_pairs = [[min(pair[0], pair[1]), max(pair[0], pair[1]), pair[2]] for pair in nonlocal_bonds]
+
+        # Step 2: Sort the entire list of bonds by the first element of each pair
+        sorted_nonlocal_bonds = sorted(sorted_bond_pairs, key=lambda x: (x[0], x[1]))
+
+        print(sorted_nonlocal_bonds)
+
+        return sorted_nonlocal_bonds
 
 
 class DatabaseManager:
@@ -561,35 +637,3 @@ class MLDatabaseManagerParallel:
 
             # Insert the DataFrame into the SQLite database
             df.to_sql(name=table_name, con=conn, if_exists=if_exists, index=False)
-
-
-class EnhancedConfigGenerator(ConfigGenerator):
-    def randomize_param(self, config, param, settings):
-        # Special handling for 'nonlocal_bonds' parameter
-        if param == "nonlocal_bonds":
-            if 'nbeads' in config:
-                nbeads = config['nbeads']
-                # Generate a random index1 between 0 and nbeads-1
-                index1 = random.randint(0, nbeads - 1)
-
-                # Calculate allowed values for index2, excluding nearest and next-nearest neighbors
-                excluded_indices = {(index1 + i) % nbeads for i in (-2, -1, 0, 1, 2)}
-                allowed_indices = set(range(nbeads)) - excluded_indices
-
-                # If no allowed indices are available (which may happen in small systems), raise an error
-                if not allowed_indices:
-                    raise ValueError(
-                        "Cannot find a suitable index2 that is not a nearest or next-nearest neighbor of index1 due to small nbeads.")
-
-                # Choose index2 from the allowed values
-                index2 = random.choice(list(allowed_indices))
-
-                # Assuming nonlocal_bonds expects a list of tuples or lists with indices
-                config[param] = [[index1, index2]]
-                return str([[index1, index2]])  # Convert to string if needed for output_row format
-            else:
-                raise ValueError(
-                    "nbeads value is required for randomizing nonlocal_bonds indices but not found in config")
-
-        # For all other parameters, use the base class method
-        return super().randomize_param(config, param, settings)
