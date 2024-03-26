@@ -5,7 +5,7 @@ import json
 from scipy.stats import skew, kurtosis
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize, StandardScaler
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 from functools import cached_property
 from lightning.pytorch import seed_everything
 from torch.utils.data import DataLoader, TensorDataset
@@ -50,7 +50,6 @@ class FoldingTransitionEntropyData:
         :param mask: str: a bitstring of 0s and 1s
         :return: a np.Array with the mask applied
         """
-
 
         # Convert the mask string into a boolean array
         bool_mask = np.array(list(mask)) == '1'
@@ -189,7 +188,8 @@ class FoldingMLPDataMFPT(FoldingMLPData):
 
         return mlp_data
 
-    def get_datasets(self, csv=None, query='nbeads == 25', val_size=0.2, batch_size=1, seed=42):
+    def get_datasets(self, csv=None, data=None, query='nbeads == 25', val_size=0.2, batch_size=1, seed=42,
+                     second_split=0):
 
         # convert the target columns ot list to work better as pandas col index
         target_columns = list(self.target_columns)
@@ -207,24 +207,43 @@ class FoldingMLPDataMFPT(FoldingMLPData):
         if query is not None:
             df = df.query(query)
 
-        # Assuming target columns given
-        features = df[self.generated_feature_names].values
-        targets = df[target_columns].values
+        if data is not None:
+            df = data
 
-        # Standardize features
+        # Split based on unique configuration IDs
+        config_ids = df['Config_Id'].unique()
+        train_ids, val_ids = train_test_split(config_ids, test_size=val_size, random_state=seed)
+
+        train_df = df[df['Config_Id'].isin(train_ids)]
+        val_df = df[df['Config_Id'].isin(val_ids)]
+
+        if second_split:
+            # Split based on unique configuration IDs
+            config_ids = train_df['Config_Id'].unique()
+            train_ids, val_ids = train_test_split(config_ids, test_size=0.2, random_state=seed)
+
+            train_df = df[df['Config_Id'].isin(train_ids)]
+            val_df = df[df['Config_Id'].isin(val_ids)]
+
+        # Process training set
+        X_train = train_df[self.generated_feature_names].values
+        y_train = train_df[target_columns].values
+
+        # Process validation set
+        X_val = val_df[self.generated_feature_names].values
+        y_val = val_df[target_columns].values
+
+        # Standardize features (fit on training data, then transform both training and validation data)
         scaler = StandardScaler()
-        features_scaled = scaler.fit_transform(features)
-
-        # Split into training and validation sets
-        X_train, X_val, y_train, y_val = train_test_split(features_scaled, targets, test_size=val_size)
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_val_scaled = scaler.transform(X_val)
 
         # Convert to PyTorch tensors
-        train_dataset = TensorDataset(torch.Tensor(X_train), torch.Tensor(y_train))
-        val_dataset = TensorDataset(torch.Tensor(X_val), torch.Tensor(y_val))
-
-        # Create DataLoader
+        train_dataset = TensorDataset(torch.Tensor(X_train_scaled), torch.Tensor(y_train))
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=1)
+
+        val_dataset = TensorDataset(torch.Tensor(X_val_scaled), torch.Tensor(y_val))
+        val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
         return train_loader, val_loader, self.generated_feature_names, target_columns, scaler
 
