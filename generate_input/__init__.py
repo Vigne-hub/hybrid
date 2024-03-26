@@ -144,35 +144,34 @@ class ConfigGenerator:
         self._update_database(data)
 
     def get_new_config(self):
-        # initialize new file based on template base config, and a new row list
-        new_config = self._base_config.copy()
+        new_config = self.base_config.copy()
         output_row = []
 
-        # iterate through all the parameter keys and its values in param settings
+        # Directly update new_config and build output_row in one go
         for param, settings in self.param_settings.items():
-
-            # if param is rc then modify the rcs in the nonlocal bonds list
-            if param == "rc":
-                new_config["nonlocal_bonds"] = self._randomize_rcs(new_config["nonlocal_bonds"], settings)
-
-                # append value for nonlocal bonds to the row for this file
-                output_row.append(str(new_config["nonlocal_bonds"]))
-
-            else:
-
-                # check if param value is given by range or by values
-                if 'range' in settings:
-                    # pick values from a uniform distribution within the range given
-                    new_config[param] = random.uniform(*settings['range'])
-
-                elif 'values' in settings:
-                    # pick values from the set of possible choices randomly
-                    new_config[param] = random.choice(settings['values'])
-
-                # append value for this param to the row for this file
-                output_row.append(new_config[param])
+            value = self.randomize_param(new_config, param, settings)
+            output_row.append(value)
 
         return output_row, new_config
+
+    def randomize_param(self, config, param, settings):
+        if param == "rc":
+            randomized_values = self._randomize_rcs(config["nonlocal_bonds"], settings)
+            config["nonlocal_bonds"] = randomized_values
+            return str(randomized_values)  # Kept as string since it is needed for output_row format
+
+        value = None
+        if 'range' in settings:
+            value = random.uniform(*settings['range'])
+        elif 'values' in settings:
+            value = random.choice(settings['values'])
+
+        # Update config directly here for non-"rc" params
+        if value is not None:
+            config[param] = value
+            return value
+
+        raise ValueError(f"No valid randomization rule found for parameter: {param}")
 
     @staticmethod
     def _randomize_rcs(nonlocal_bonds, settings) -> list[list[Any]]:
@@ -562,3 +561,35 @@ class MLDatabaseManagerParallel:
 
             # Insert the DataFrame into the SQLite database
             df.to_sql(name=table_name, con=conn, if_exists=if_exists, index=False)
+
+
+class EnhancedConfigGenerator(ConfigGenerator):
+    def randomize_param(self, config, param, settings):
+        # Special handling for 'nonlocal_bonds' parameter
+        if param == "nonlocal_bonds":
+            if 'nbeads' in config:
+                nbeads = config['nbeads']
+                # Generate a random index1 between 0 and nbeads-1
+                index1 = random.randint(0, nbeads - 1)
+
+                # Calculate allowed values for index2, excluding nearest and next-nearest neighbors
+                excluded_indices = {(index1 + i) % nbeads for i in (-2, -1, 0, 1, 2)}
+                allowed_indices = set(range(nbeads)) - excluded_indices
+
+                # If no allowed indices are available (which may happen in small systems), raise an error
+                if not allowed_indices:
+                    raise ValueError(
+                        "Cannot find a suitable index2 that is not a nearest or next-nearest neighbor of index1 due to small nbeads.")
+
+                # Choose index2 from the allowed values
+                index2 = random.choice(list(allowed_indices))
+
+                # Assuming nonlocal_bonds expects a list of tuples or lists with indices
+                config[param] = [[index1, index2]]
+                return str([[index1, index2]])  # Convert to string if needed for output_row format
+            else:
+                raise ValueError(
+                    "nbeads value is required for randomizing nonlocal_bonds indices but not found in config")
+
+        # For all other parameters, use the base class method
+        return super().randomize_param(config, param, settings)
