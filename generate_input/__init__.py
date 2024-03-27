@@ -254,10 +254,13 @@ class ConfigGeneratorDriver(ConfigGenerator):
 
     def randomize_nonlocal_bonds(self, nonlocal_bonds, bead_count):
 
+        unique_bonds = set()
         updated_bonds = []
-        for bond in nonlocal_bonds:
-            # Unpack the existing bond to preserve the rc value
-            _, _, rc = bond
+
+        # get the list of rc values found in nonlocal bonds
+        rc_vals = [bond[-1] for bond in nonlocal_bonds]
+
+        while len(updated_bonds) < len(nonlocal_bonds):
 
             # Generate a random index1 between 0 and n_beads-1
             index1 = random.randint(0, bead_count - 1)
@@ -273,8 +276,16 @@ class ConfigGeneratorDriver(ConfigGenerator):
             # Choose index2 from the allowed values
             index2 = random.choice(list(allowed_indices))
 
-            # Update the bond with new indices while preserving rc
-            updated_bonds.append([index1, index2, rc])
+            # define bond my just indices first
+            bond = tuple(sorted((index1, index2)))
+
+            # check for uniqueness of the bond pair ignoring the rc
+            if bond not in unique_bonds:
+                unique_bonds.add(bond)  # add new bond to unqiue bonds set
+                updated_bonds.append(bond)  # append unqiue bond to output bonds list
+
+        # add the rc values in the order they appear in nonlocal bonds
+        updated_bonds = [list(bond) + [rc_vals[i]] for i, bond in enumerate(updated_bonds)]
 
         # Format bonds in ascending order and return
         return self.format_bonds(updated_bonds)
@@ -602,7 +613,7 @@ class MLDatabaseManagerParallel:
 
         self.create_blank_csv_with_header(output_csv, csv_headers)
 
-        directories = [d for d in Path(search_path).iterdir() if d.is_dir()]
+        directories = [d for d in Path(search_path).iterdir() if d.is_dir() and d.suffix != ".tmp"]
 
         process_func = partial(self.process_csv_and_write,
                                csv_name=csv_name,
