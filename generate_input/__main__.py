@@ -84,6 +84,9 @@ def integrate_csv_wrapper(settings_config_file, serial=0):
                                db_name=config.get('master_settings', 'database_name', fallback="configurations.db")
                                )
 
+    # merge the diff s bias and the diff s bias tables
+    manager.create_merged_table(db_name=config.get('master_settings', 'database_name', fallback="configurations.db"))
+
     if serial:
         manager.close()
 

@@ -648,3 +648,47 @@ class MLDatabaseManagerParallel:
 
             # Insert the DataFrame into the SQLite database
             df.to_sql(name=table_name, con=conn, if_exists=if_exists, index=False)
+
+
+    def create_merged_table(self, db_name):
+        """
+        Creates a new table named merged_table by merging data from diff_s_bias and mfpt
+        tables based on multiple join conditions.
+
+        Parameters:
+        db_path (str): The file path to the SQLite database.
+        """
+        # Connect to the SQLite database
+        conn = sqlite3.connect(self.output_path / db_name)
+        cursor = conn.cursor()
+
+        # SQL query to create the merged_table
+        create_table_query = """
+        CREATE TABLE merged_table AS
+        SELECT
+            diff_s_bias.*,
+            mfpt.outer_fpt,
+            mfpt.inner_fpt
+        FROM
+            diff_s_bias
+        LEFT JOIN
+            mfpt
+        ON
+            diff_s_bias.Config_Id = mfpt.Config_Id
+            AND diff_s_bias.nonlocal_bonds = mfpt.nonlocal_bonds
+            AND diff_s_bias.nbeads = mfpt.nbeads
+            AND diff_s_bias.state_i_bits = mfpt.state_i_bits
+            AND diff_s_bias.state_j_bits = mfpt.state_j_bits
+        """
+
+        # Execute the SQL query
+        cursor.execute(create_table_query)
+
+        # Commit the changes to the database
+        conn.commit()
+
+        # Close the database connection
+        conn.close()
+
+        print("merged_table created successfully.")
+
