@@ -265,9 +265,10 @@ class ConfigGeneratorDriver(ConfigGenerator):
         if not self.nbonds:
             print("nbonds not provided, defaulting to template size")
             max_len = len(nonlocal_bonds)
-
         else:
             max_len = self.nbonds
+
+        rc_vals = random.choices(rc_vals, k=max_len)
 
         while len(updated_bonds) < max_len:
 
