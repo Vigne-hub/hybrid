@@ -1,7 +1,7 @@
 import lightning as L
 from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
 from models import MLPModule
-from pre_processing import FoldingMLPData, FoldingMLPDataMFPT
+from pre_processing import FoldingMLPData, FoldingMLPDataMFPT, FoldingMLPVaryPattern
 from sklearn.model_selection import train_test_split, KFold
 from lightning.pytorch import seed_everything
 import pandas as pd
@@ -13,47 +13,10 @@ import multiprocessing
 from multiprocessing import Pool
 
 
-def main(csv_name, write=1, target_columns=None, seed=42):
-    seed_everything(seed, workers=True)
-    # Assuming the correct database file path
-    mlp_dataset = FoldingMLPDataMFPT()
-    print(mlp_dataset.mlp_data.head())
-
-    if write:
-        mlp_dataset.write_mlp_dataset_to_csv(csv_name)
-
-    if target_columns is not None:
-        mlp_dataset.target_columns = [el for el in target_columns]
-
-    train_loader, val_loader, features, targets, scaler = (
-
-        mlp_dataset.get_datasets(csv_name,
-                                 query=None,
-                                 val_size=0.2,
-                                 batch_size=1,
-                                 seed=seed)
-    )
-
-    # Initialize the module
-    i = len(features)
-    model = MLPModule(features, targets, hidden_dims=[10, 6, 4], scaler=scaler, learning_rate=1e-2)
-
-    # Initialize the trainer
-    trainer = L.Trainer(deterministic=True, max_epochs=100,
-
-                        callbacks=[EarlyStopping(monitor='val_loss', patience=5, verbose=True)
-                                   ])
-    # Train the model
-    trainer.fit(model, train_loader, val_loader)
-
-    # Test the model
-    trainer.test(model, val_loader)
-
-
 def main_sizes(csv_name, target_columns, seed=42, write=False, version=1):
     seed_everything(seed, workers=True)
     # Assuming the correct database file path
-    mlp_dataset = FoldingMLPDataMFPT()
+    mlp_dataset = FoldingMLPDataMFPT(existing_csv=csv_name, feature_names=['state_i_int', 'state_j_int', 'rc1', 'rc2'])
     print(mlp_dataset.mlp_data.head())
 
     if write:
@@ -123,7 +86,7 @@ def train_model(val_size, mlp_dataset, csv_name):
     )
 
     # Initialize the model for this fold
-    model = MLPModule(features, targets, hidden_dims=[10, 6, 4], scaler=scaler, learning_rate=1e-2)
+    model = MLPModule(features, targets, hidden_dims=[26, 12, 10, 6, 4], scaler=scaler, learning_rate=1e-2)
 
     # Initialize the trainer
     trainer = L.Trainer(deterministic=True, max_epochs=100,
@@ -169,8 +132,60 @@ def P_main(version, seed, target_columns):
         writer.writerows(results)
 
 
+def main(csv_name, write=1, target_columns=None, seed=42, mlp_dataset=None):
+
+    if mlp_dataset is None:
+        raise ValueError("Need a mlp dataset to train with")
+
+    seed_everything(seed, workers=True)
+
+    print(mlp_dataset.mlp_data.head())
+
+    if write:
+        mlp_dataset.write_mlp_dataset_to_csv(csv_name)
+
+    if target_columns is not None:
+        mlp_dataset.target_columns = [el for el in target_columns]
+
+    train_loader, val_loader, features, targets, scaler = (
+
+        mlp_dataset.get_datasets(csv_name,
+                                 query=None,
+                                 val_size=0.2,
+                                 batch_size=1,
+                                 seed=seed)
+    )
+
+    # Initialize the module
+    i = len(features)
+    model = MLPModule(features, targets, hidden_dims=[32, 16, 8], scaler=scaler, learning_rate=1e-3)
+
+    # Initialize the trainer
+    trainer = L.Trainer(deterministic=True, max_epochs=100,
+
+                        callbacks=[EarlyStopping(monitor='val_loss', patience=5, verbose=True)
+                                   ])
+    # Train the model
+    trainer.fit(model, train_loader, val_loader)
+
+    # Test the model
+    trainer.test(model, val_loader)
+
+
 if __name__ == '__main__':
-    P_main(version=1, seed=42, target_columns=['s_bias_mean'])
+
+    csv_name = ["mlpdata_nbeads=30_vary_pattern.csv", "mlp_data_nbeads=25.csv", "mlpdata_nbeads=30_vary_pattern_more_data.csv"]
+
+    main(csv_name[2], write=0, target_columns=['outer_fpt'], seed=42,
+
+         mlp_dataset=FoldingMLPVaryPattern(existing_csv=csv_name[2],
+                                        feature_names=['state_i_int', 'state_j_int', 'rc1', 'rc2', 'i1', 'j1', 'i2', 'j2', 's_bias_mean'])
+
+         )
+
+
+
+    #P_main(version=1, seed=42, target_columns=['s_bias_mean'])
 
     # main_sizes(csv_name="mlp_dataset_nbeads=25.csv", write=0, target_columns=['s_bias_mean'])
 

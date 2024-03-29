@@ -55,7 +55,7 @@ class MLPModule(L.LightningModule):
 
         self.model = nn.Sequential(*layers)
 
-        self.loss = MeanRelativeError()
+        self.loss = nn.MSELoss()
 
         self.save_hyperparameters()
 

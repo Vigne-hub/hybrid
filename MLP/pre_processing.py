@@ -13,6 +13,10 @@ import torch
 
 
 class FoldingTransitionEntropyData:
+    """
+    This class contains the base raw data generated for a bunch of hybridmc simulations.
+    """
+
     def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db'):
         self._data = None
         self._database_file = database_file
@@ -76,9 +80,15 @@ class FoldingTransitionEntropyData:
 
 
 class FoldingMLPData(FoldingTransitionEntropyData):
-    def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db'):
+    """
+    This is the base class for using the hybridmc raw data for an MLP based ML method
+    """
+
+    def __init__(self, database_file='../generate_input/simulation_configs_1/configurations.db', feature_names=None,
+                 existing_csv=None):
         super(FoldingMLPData, self).__init__(database_file)
-        self.generated_feature_names = None
+        self.generated_feature_names = feature_names
+        self.existing_csv = existing_csv
 
     def calculate_features(self, row):
 
@@ -109,9 +119,13 @@ class FoldingMLPData(FoldingTransitionEntropyData):
 
     @cached_property
     def mlp_data(self):
-        features = self.data.apply(self.calculate_features, axis=1)
 
-        mlp_data = pd.concat([self.data, features], axis=1)
+        if self.existing_csv:
+            mlp_data = pd.read_csv(self.existing_csv)
+        else:
+            features = self.data.apply(self.calculate_features, axis=1)
+
+            mlp_data = pd.concat([self.data, features], axis=1)
 
         mlp_data = mlp_data.dropna()
 
@@ -133,15 +147,21 @@ class FoldingMLPData(FoldingTransitionEntropyData):
 
 
 class FoldingMLPDataMFPT(FoldingMLPData):
-    def __init__(self, database_file='../generate_input/simulation_configs_25/configurations_25.db',
+    """
+    This class is used to generate an MLP dataset for a many target MLP architecture, the two targets are the sbias and
+    the MFPT. This class also provides the dataloaders to be used with pytorch using the MLP dataset.
+    """
+
+    def __init__(self, database_file='../generate_input/simulation_configs_2/configurations_2.db',
                  table_name="merged_table",
+                 feature_names=None,
+                 existing_csv=None,
                  target_columns=tuple(['s_bias_mean', 'outer_fpt', 'inner_fpt'])):
 
-        self.generated_feature_names = None
         self.target_columns = target_columns
         self.table_name = table_name
 
-        super().__init__(database_file)
+        super().__init__(database_file, feature_names, existing_csv)
 
     def load_data_from_sql(self):
         """
@@ -169,24 +189,6 @@ class FoldingMLPDataMFPT(FoldingMLPData):
                                           axis=1)
 
         return df
-
-    def generate_MLP_dataset(self):
-        """
-        Generate a MLP dataset for use in the MLP-based Neural Network
-        :param self:
-        :return:
-        """
-        features = self.data.apply(self.calculate_features, axis=1)
-
-        mlp_data = pd.concat([self.data, features], axis=1)
-
-        try:
-            mlp_data = mlp_data[self.generated_feature_names + list(self.target_columns)].dropna()
-        except Exception as e:
-            print(e)
-            raise Exception("error occurred while generating MLP dataset")
-
-        return mlp_data
 
     def get_datasets(self, csv=None, data=None, query='nbeads == 25', val_size=0.2, batch_size=1, seed=42,
                      second_split=0):
@@ -243,13 +245,37 @@ class FoldingMLPDataMFPT(FoldingMLPData):
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
         val_dataset = TensorDataset(torch.Tensor(X_val_scaled), torch.Tensor(y_val))
-        val_loader = DataLoader(val_dataset, batch_size=batch_size)
+        val_loader = DataLoader(val_dataset, batch_size=1)
 
         return train_loader, val_loader, self.generated_feature_names, target_columns, scaler
 
 
+class FoldingMLPVaryPattern(FoldingMLPDataMFPT):
+    """
+    This class extends the FoldingMLPDataMFPT class to provide features with varying bond patterns
+    """
+    def calculate_features(self, row):
+        state_i_int = int(row['state_i_bits'], base=2)
+        state_j_int = int(row['state_j_bits'], base=2)
+        rc1, rc2 = (float(el[2]) for el in row.nonlocal_bonds)
+
+        # obtain the 0th and 1st columns in nonlocal bonds (the bead indices for i and j resepctively)
+        bead_indices = list(np.array(row.nonlocal_bonds)[:, 0:2].flatten())
+
+        # the bead indices is of the form i1, j1, i2, j2 where nonlocal bonds = [[i1, j1, rc1], [i2, j2, rc2]]
+
+        # define the feature names
+        self.generated_feature_names = ['state_i_int', 'state_j_int', 'rc1', 'rc2', 'i1', 'j1', 'i2', 'j2']
+
+        # create pandas series with with the features in approporiate positions as in the index list
+        return pd.Series(
+            [state_i_int, state_j_int, rc1, rc2] + bead_indices,
+
+            index=self.generated_feature_names)
+
+
 if __name__ == '__main__':
     # Assuming the correct database file path
-    mlp_dataset = FoldingMLPDataMFPT()
+    mlp_dataset = FoldingMLPVaryPattern(database_file='../generate_input/simulation_configs_2/configurations_2.db')
     print(mlp_dataset.mlp_data.head())
-    mlp_dataset.write_mlp_dataset_to_csv('mlp_dataset_nbeads=25.csv')
+    mlp_dataset.write_mlp_dataset_to_csv('mlpdata_nbeads=30_vary_pattern_more_data.csv')

@@ -210,6 +210,8 @@ class ConfigGeneratorDriver(ConfigGenerator):
 
             self.N_tries_for_unique = config.getint('master_settings', 'N_tries_for_unique', fallback=2000)
 
+            self.nbonds = config.getint('master_settings', 'n_bonds', fallback=0)
+
         # if not given then just use defaults
         else:
             super().__init__()
@@ -260,7 +262,10 @@ class ConfigGeneratorDriver(ConfigGenerator):
         # get the list of rc values found in nonlocal bonds
         rc_vals = [bond[-1] for bond in nonlocal_bonds]
 
-        while len(updated_bonds) < len(nonlocal_bonds):
+        if not self.nbonds:
+            print("nbonds not provided, defaulting to template size")
+            max_len = len(nonlocal_bonds)
+        while len(updated_bonds) < max_len:
 
             # Generate a random index1 between 0 and n_beads-1
             index1 = random.randint(0, bead_count - 1)
